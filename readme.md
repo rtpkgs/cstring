@@ -1,63 +1,50 @@
+# cstring 库
+
+C 语言没有原生的 string 类型，这使得 string 的管理非常麻烦。cstring 是一个简单的 string 库，它主要解决以下几个问题：
+
+* 对于短字符串（小于 32 字节），进行 string interning 。这可以在文本处理时节约不少内存。短 string 相当于 symbol 类型，对它做比较操作的代价可以减少到 O(1) 。
+* 对于临时字符串，如果长度不大（小于 128 字节），尽可能的放在 stack 上，避免动态内存分配。
+* 支持常量字符串，对于常量短字符串只做一次 string interning 操作。
+* 使用引用计数管理相同的字符串，减少字符串的拷贝。
+* 短字符串，常量字符串，以及引用次数非常多（大于 64K 次）的字符串可以不动态释放，简化生命期管理。
+* 惰性计算，以及缓存字符串的 hash 值，以方便实现 hashmap 。
+* 这个库是线程安全的。
+
+# cstring_buffer
+
+不要直接定义 cstring_buffer 类型，而应该用 CSTRING_BUFFER(var) 声明，它相当于声明了一个名为 var 的 cstring_buffer 对象。
+
+cstring_buffer 位于栈上，通常不需要回收。但是在函数结束时，应该使用 CSTRING_CLOSE(var) 关闭它。
+
+新声明的 cstring_buffer 对象是一个空字符串，可以用下面两个 api 修改它。
+
+```C
+cstring cstring_cat(cstring_buffer sb, const char * str);
+cstring cstring_printf(cstring_buffer sb, const char * format, ...);
+```
+
 # cstring
 
-## 1、介绍
+如果需要把字符串做参数传递，就应该使用 cstring 类型，而不是 cstring_buffer 类型。CSTRING(var) 可以把 var 这个 cstring_buffer 对象，转换为 cstring 类型。
 
-> 说明：你需要在这里对项目进行简单的介绍，描述项目背景，当前现状、功能特点等等……
+但是，在对 cstring_buffer 对象做新的操作后，这个 cstring 可能无效。所以每次传递 cstring_buffer 内的值，最好都重新用 CSTRING 宏取一次。
 
-这是一个在 RT-Thread 上，用于演示的 package 。展示了一个 package 大致包括的内容，以及对应的一些模版文件。
-
-### 1.1 目录结构
-
-> 说明：参考下面表格，整理出 packages 的目录结构
-
-| 名称 | 说明 |
-| ---- | ---- |
-| docs  | 文档目录 |
-| examples | 例子目录，并有相应的一些说明 |
-| inc  | 头文件目录 |
-| src  | 源代码目录 |
-| port | 移植代码目录。如果没有移植代码，可以不需要 |
-
-### 1.2 许可证
-
-> 说明：请在这里说明该 package 的授权许可，例如： GPLv2、LGPLv2.1、MIT、Apache license v2.0、BSD 等。
-
-hello package 遵循 LGPLv2.1 许可，详见 `LICENSE` 文件。
-
-### 1.3 依赖
-
-> 说明：列出该 package 对于其他 package 、RT-Thread 操作系统版本等软件方面的依赖关系。
-
-- RT-Thread 3.0+
-
-## 2、如何打开 hello
-
-> 说明：描述该 package 位于 menuconfig 的位置，并对与其相关的配置进行介绍
-
-使用 hello package 需要在 RT-Thread 的包管理器中选择它，具体路径如下：
-
-```
-RT-Thread online packages
-    miscellaneous packages --->
-        [*] A hello package
+函数调用的参数以及返回值，都应该使用 cstring 类型。如果 cstring 是由外部传入的，无法确定它的数据在栈上还是堆上，所以不能长期持有。如果需要把 cstring 保存在数据结构中，可以使用这对 API :
+```C
+cstring cstring_grab(cstring s);
+void cstring_release(cstring s);
 ```
 
-然后让 RT-Thread 的包管理器自动更新，或者使用 `pkgs --update` 命令更新包到 BSP 中。
+把 cstring 转化为标准的 const char * ，只需要用 s->cstr 即可。
 
-## 3、使用 cstring
+cstring 的比较操作以及 hash 操作都比 const char * 廉价，所以，请使用以下 API :
+```C
+int cstring_equal(cstring a, cstring b);
+uint32_t cstring_hash(cstring s);
+```
 
-> 说明：在这里介绍 package 的移植步骤、使用方法、初始化流程、准备工作、API 等等，如果移植或 API 文档内容较多，可以将其独立至 `docs` 目录下。
+# literal
 
-在打开 hello package 后，当进行 bsp 编译时，它会被加入到 bsp 工程中进行编译。
+CSTRING_LITERAL(var, literal) 可以声明一个常量 cstring 。这里 literal 必须是一个 " 引起的字符串常量。
 
-* 完整的 API 手册可以访问这个[链接](docs/api.md)
-* 更多文档位于 [`/docs`](/docs) 下，使用前 **务必查看**
 
-## 4、注意事项
-
-> 说明：列出在使用这个 package 过程中需要注意的事项；列出常见的问题，以及解决办法。
-
-## 5、联系方式 & 感谢
-
-* 维护：liu2guang
-* 主页：https://github.com/liu2guang/cstring
